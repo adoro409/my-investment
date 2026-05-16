@@ -2808,39 +2808,19 @@ async function saveAcct() {
   };
   try {
     if (_editAcctId) {
-      const oldAcct = APP.accounts.find(a => a.id === _editAcctId);
-      const oldName = oldAcct?.name || '';
       await sbUpdate('accounts', _editAcctId, updates);
-
-      // 계좌명이 바뀐 경우 → 연관 데이터 일괄 업데이트
-      if (oldName && oldName !== name) {
-        const sb = getSB();
-        showLoading(true, '계좌명 연관 데이터 업데이트 중...');
-        try {
-          // 1) trades / deposits / snapshots 의 acct_name 업데이트
-          await Promise.all([
-            sb.from('trades')   .update({ acct_name: name }).eq('acct_id', _editAcctId),
-            sb.from('deposits') .update({ acct_name: name }).eq('acct_id', _editAcctId),
-            sb.from('snapshots').update({ acct_name: name }).eq('acct_id', _editAcctId),
-            // acct_id에 이전 계좌명이 들어간 경우도 처리
-            sb.from('trades')   .update({ acct_name: name }).eq('acct_name', oldName),
-            sb.from('deposits') .update({ acct_name: name }).eq('acct_name', oldName),
-            sb.from('snapshots').update({ acct_name: name }).eq('acct_name', oldName),
-          ]);
-          // 2) overrides의 acct_name 업데이트
-          const { data: ovrRows } = await sb.from('settings')
-            .select('key,value')
-            .like('key', `ovr_${_editAcctId}__%__acct_name`);
-          if (ovrRows?.length) {
-            await Promise.all(
-              ovrRows
-                .filter(r => r.value === oldName)
-                .map(r => sb.from('settings').update({ value: name }).eq('key', r.key))
-            );
-          }
-        } finally {
-          showLoading(false);
-        }
+      // 계좌명 변경 시 연관 데이터 자동 동기화
+      showLoading(true, '계좌명 동기화 중...');
+      try {
+        // accounts가 아직 reload 전이므로 임시 nameMap 직접 구성
+        const tempAccounts = APP.accounts.map(a =>
+          a.id === _editAcctId ? { ...a, name } : a
+        );
+        const nameMap = {};
+        tempAccounts.forEach(a => { nameMap[a.id] = a.name; nameMap[a.name] = a.name; });
+        await _runAcctNameSync(nameMap);
+      } finally {
+        showLoading(false);
       }
       showToast('✅ 계좌 수정 완료');
     } else {
@@ -2851,38 +2831,54 @@ async function saveAcct() {
     closeModal('acctModal');
   } catch(e) { showToast('저장 실패: '+e.message,'error'); }
 }
+// 계좌명 동기화 공통 로직 (saveAcct & 수동 동기화 버튼 공유)
+async function _runAcctNameSync(nameMap) {
+  const sb = getSB(); if (!sb) return 0;
+  const tables = [
+    { name: 'trades',    rows: APP.trades    },
+    { name: 'deposits',  rows: APP.deposits  },
+    { name: 'snapshots', rows: APP.snapshots },
+  ];
+  let totalFixed = 0;
+  for (const tbl of tables) {
+    const byAcctId = {};
+    tbl.rows.forEach(r => {
+      const correctName = nameMap[r.acct_id];
+      if (correctName && correctName !== r.acct_name)
+        byAcctId[r.acct_id] = correctName;
+    });
+    for (const [acctId, correctName] of Object.entries(byAcctId)) {
+      const { error } = await sb.from(tbl.name)
+        .update({ acct_name: correctName }).eq('acct_id', acctId);
+      if (!error) totalFixed++;
+    }
+  }
+  // overrides acct_name 동기화
+  const { data: ovrRows } = await sb.from('settings').select('key,value').like('key','ovr_%__acct_name');
+  if (ovrRows?.length) {
+    for (const row of ovrRows) {
+      const m = row.key.match(/^ovr_(.+)__[^_]+__acct_name$/);
+      if (!m) continue;
+      const correctName = nameMap[m[1]];
+      if (correctName && row.value !== correctName) {
+        await sb.from('settings').update({ value: correctName }).eq('key', row.key);
+        totalFixed++;
+      }
+    }
+  }
+  return totalFixed;
+}
+
 async function syncAllAcctNames() {
   const sb = getSB(); if (!sb) { showToast('Supabase 미연결', 'error'); return; }
   if (!confirm('모든 거래·입출금·스냅샷의 계좌명을 현재 계좌 목록 기준으로 동기화합니다.\n계속하시겠습니까?')) return;
   showLoading(true, '계좌명 동기화 중...');
   try {
-    let updated = 0;
-    for (const acct of APP.accounts) {
-      const tasks = [
-        // acct_id 기준으로 acct_name 업데이트
-        sb.from('trades')   .update({ acct_name: acct.name }).eq('acct_id', acct.id),
-        sb.from('deposits') .update({ acct_name: acct.name }).eq('acct_id', acct.id),
-        sb.from('snapshots').update({ acct_name: acct.name }).eq('acct_id', acct.id),
-      ];
-      const results = await Promise.all(tasks);
-      results.forEach(r => { if (r.data) updated += r.data.length || 0; });
-    }
-    // overrides의 acct_name도 동기화
-    const { data: ovrRows } = await sb.from('settings').select('key,value').like('key','ovr_%__acct_name');
-    if (ovrRows?.length) {
-      for (const row of ovrRows) {
-        // key: ovr_{acct_id}__{code}__acct_name
-        const m = row.key.match(/^ovr_(.+)__[^_]+__acct_name$/);
-        if (!m) continue;
-        const acct = APP.accounts.find(a => a.id === m[1]);
-        if (acct && row.value !== acct.name) {
-          await sb.from('settings').update({ value: acct.name }).eq('key', row.key);
-          updated++;
-        }
-      }
-    }
+    const nameMap = {};
+    APP.accounts.forEach(a => { nameMap[a.id] = a.name; nameMap[a.name] = a.name; });
+    const totalFixed = await _runAcctNameSync(nameMap);
     await reload();
-    showToast(`✅ 계좌명 동기화 완료`);
+    showToast(`✅ 계좌명 동기화 완료 (${totalFixed}개 처리)`);
   } catch(e) {
     showToast('동기화 실패: ' + e.message, 'error');
   } finally {
