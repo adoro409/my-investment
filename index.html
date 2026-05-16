@@ -2239,14 +2239,18 @@ async function saveOwner() {
       if (APP.owners.find(o => o.name === name)) {
         showToast('이미 존재하는 소유자 이름입니다.', 'error'); return;
       }
+      // id 자동 생성 (max+1)
+      const nextId = APP.owners.length > 0
+        ? Math.max(...APP.owners.map(o => parseInt(o.id) || 0)) + 1
+        : 1;
       // 추가: display_name/color 지원 여부 자동 감지
       try {
-        await sbInsert('owners', { name, display_name: display, color });
+        await sbInsert('owners', { id: nextId, name, display_name: display, color });
       } catch(e) {
         if (e.message?.includes('column') || e.code === '42703') {
-          // 컬럼 없으면 name만 저장 (표시명을 name에 저장)
-          await sbInsert('owners', { name: display });
-          showToast('✅ 소유자 추가 완료 (표시명·컬러 컬럼 미지원 — name으로 저장)');
+          // 컬럼 없으면 name만 저장
+          await sbInsert('owners', { id: nextId, name: display });
+          showToast('✅ 소유자 추가 완료');
           closeModal('ownerModal');
           await reload();
           return;
