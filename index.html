@@ -2226,18 +2226,39 @@ async function saveOwner() {
   btn.disabled = true;
   try {
     if (_editOwnerId) {
-      await sbUpdate('owners', _editOwnerId, { display_name: display, color });
+      // 수정: display_name/color 지원 여부 자동 감지
+      try {
+        await sbUpdate('owners', _editOwnerId, { display_name: display, color });
+      } catch(e) {
+        // 컬럼 없으면 name만 업데이트 (표시명=name으로 처리)
+        if (e.message?.includes('column') || e.code === '42703') {
+          await sbUpdate('owners', _editOwnerId, { name: display });
+        } else throw e;
+      }
     } else {
       if (APP.owners.find(o => o.name === name)) {
         showToast('이미 존재하는 소유자 이름입니다.', 'error'); return;
       }
-      await sbInsert('owners', { name, display_name: display, color });
+      // 추가: display_name/color 지원 여부 자동 감지
+      try {
+        await sbInsert('owners', { name, display_name: display, color });
+      } catch(e) {
+        if (e.message?.includes('column') || e.code === '42703') {
+          // 컬럼 없으면 name만 저장 (표시명을 name에 저장)
+          await sbInsert('owners', { name: display });
+          showToast('✅ 소유자 추가 완료 (표시명·컬러 컬럼 미지원 — name으로 저장)');
+          closeModal('ownerModal');
+          await reload();
+          return;
+        } else throw e;
+      }
     }
     closeModal('ownerModal');
     await reload();
     showToast(_editOwnerId ? '✅ 소유자 수정 완료' : '✅ 소유자 추가 완료');
   } catch(e) {
-    showToast('저장 실패: ' + e.message, 'error');
+    console.error('saveOwner error:', e);
+    showToast('저장 실패: ' + (e.message || JSON.stringify(e)), 'error');
   } finally {
     btn.disabled = false;
   }
