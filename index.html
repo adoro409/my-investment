@@ -2807,17 +2807,34 @@ async function saveAcct() {
       const oldName = oldAcct?.name || '';
       await sbUpdate('accounts', _editAcctId, updates);
 
-      // 계좌명이 바뀐 경우 → 해당 계좌의 override acct_name도 일괄 업데이트
+      // 계좌명이 바뀐 경우 → 연관 데이터 일괄 업데이트
       if (oldName && oldName !== name) {
         const sb = getSB();
-        const { data: ovrRows } = await sb.from('settings')
-          .select('key,value')
-          .like('key', `ovr_${_editAcctId}__%__acct_name`);
-        if (ovrRows?.length) {
-          await Promise.all(ovrRows
-            .filter(r => r.value === oldName)
-            .map(r => sb.from('settings').update({ value: name }).eq('key', r.key))
-          );
+        showLoading(true, '계좌명 연관 데이터 업데이트 중...');
+        try {
+          // 1) trades / deposits / snapshots 의 acct_name 업데이트
+          await Promise.all([
+            sb.from('trades')   .update({ acct_name: name }).eq('acct_id', _editAcctId),
+            sb.from('deposits') .update({ acct_name: name }).eq('acct_id', _editAcctId),
+            sb.from('snapshots').update({ acct_name: name }).eq('acct_id', _editAcctId),
+            // acct_id에 이전 계좌명이 들어간 경우도 처리
+            sb.from('trades')   .update({ acct_name: name }).eq('acct_name', oldName),
+            sb.from('deposits') .update({ acct_name: name }).eq('acct_name', oldName),
+            sb.from('snapshots').update({ acct_name: name }).eq('acct_name', oldName),
+          ]);
+          // 2) overrides의 acct_name 업데이트
+          const { data: ovrRows } = await sb.from('settings')
+            .select('key,value')
+            .like('key', `ovr_${_editAcctId}__%__acct_name`);
+          if (ovrRows?.length) {
+            await Promise.all(
+              ovrRows
+                .filter(r => r.value === oldName)
+                .map(r => sb.from('settings').update({ value: name }).eq('key', r.key))
+            );
+          }
+        } finally {
+          showLoading(false);
         }
       }
       showToast('✅ 계좌 수정 완료');
