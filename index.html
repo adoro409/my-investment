@@ -431,6 +431,19 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
       <button class="btn btn-ghost btn-sm" onclick="fetchFxRate().then(updateFxDisplay)">환율 새로고침</button>
     </div>
   </div>
+  <!-- 소유자 목록 -->
+  <div class="card" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="section-title" style="margin-bottom:0">소유자 관리</div>
+      <button class="btn btn-ghost btn-sm" onclick="openOwnerModal()">
+        <iconify-icon icon="lucide:plus" width="13"></iconify-icon> 소유자 추가
+      </button>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>이름(시스템)</th><th>표시명</th><th>컬러</th><th></th></tr></thead>
+      <tbody id="ownerSettingsBody"></tbody>
+    </table>
+  </div>
   <!-- 계좌 목록 -->
   <div class="card" style="margin-top:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -727,6 +740,33 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('holdingModal')">취소</button>
       <button id="ahSubmitBtn" class="btn btn-primary" onclick="submitAddHolding()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 소유자 추가/수정 Modal -->
+<div class="modal-overlay" id="ownerModal">
+  <div class="modal" style="min-width:360px">
+    <div class="modal-title" id="ownerModalTitle">👤 소유자 추가</div>
+    <div class="form-row">
+      <div class="form-group flex1">
+        <label>이름 (영문·영문자+숫자, 예: dain)</label>
+        <input id="oName" placeholder="dain">
+      </div>
+      <div class="form-group flex1">
+        <label>표시명 (한글 가능)</label>
+        <input id="oDisplayName" placeholder="다인">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>대표 컬러</label>
+        <input type="color" id="oColor" value="#4f8ef7" style="width:60px;height:34px;padding:2px;cursor:pointer">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('ownerModal')">취소</button>
+      <button class="btn btn-primary" id="ownerSaveBtn" onclick="saveOwner()">저장</button>
     </div>
   </div>
 </div>
@@ -2127,6 +2167,21 @@ function renderSettings() {
   if (!document.getElementById('cfgFinnhub').value) document.getElementById('cfgFinnhub').value = CFG.finnhub;
   document.getElementById('settingsFx').textContent = (APP.fxRate>0 ? fmt.num(APP.fxRate,2) : '—') + ' 원';
 
+  document.getElementById('ownerSettingsBody').innerHTML = APP.owners.length
+    ? APP.owners.map(o => `
+    <tr>
+      <td><code>${o.id}</code></td>
+      <td>${o.name}</td>
+      <td><strong>${o.display_name || o.name}</strong></td>
+      <td><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${o.color||'#4f8ef7'};vertical-align:middle"></span>
+          <span style="margin-left:6px;font-size:11.5px;color:var(--text3)">${o.color||''}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="openOwnerModal('${o.id}')">수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOwner('${o.id}','${o.display_name||o.name}')">삭제</button>
+      </td>
+    </tr>`).join('')
+    : `<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">등록된 소유자가 없습니다.</td></tr>`;
+
   document.getElementById('acctSettingsBody').innerHTML = APP.accounts.map(a => `
     <tr>
       <td><code>${a.id}</code></td>
@@ -2142,6 +2197,63 @@ function renderSettings() {
       <td><button class="btn btn-danger btn-sm" onclick="deleteAcct('${a.id}')">삭제</button></td>
     </tr>`).join('') || emptyRow(8,'등록된 계좌 없음');
 
+}
+
+// =====================================================================
+//  FORMS — Owner
+// =====================================================================
+let _editOwnerId = null;
+
+function openOwnerModal(ownerId) {
+  _editOwnerId = ownerId || null;
+  const o = ownerId ? APP.owners.find(x => String(x.id) === String(ownerId)) : null;
+  document.getElementById('ownerModalTitle').textContent = o ? '👤 소유자 수정' : '👤 소유자 추가';
+  document.getElementById('oName').value        = o?.name         || '';
+  document.getElementById('oDisplayName').value = o?.display_name || '';
+  document.getElementById('oColor').value       = o?.color        || '#4f8ef7';
+  document.getElementById('oName').disabled     = !!o; // 수정 시 name 변경 불가
+  openModal('ownerModal');
+}
+
+async function saveOwner() {
+  const name    = document.getElementById('oName').value.trim();
+  const display = document.getElementById('oDisplayName').value.trim();
+  const color   = document.getElementById('oColor').value;
+  if (!name)    { showToast('이름을 입력하세요', 'error'); return; }
+  if (!display) { showToast('표시명을 입력하세요', 'error'); return; }
+  const sb = getSB(); if (!sb) { showToast('Supabase 미연결', 'error'); return; }
+  const btn = document.getElementById('ownerSaveBtn');
+  btn.disabled = true;
+  try {
+    if (_editOwnerId) {
+      await sbUpdate('owners', _editOwnerId, { display_name: display, color });
+    } else {
+      if (APP.owners.find(o => o.name === name)) {
+        showToast('이미 존재하는 소유자 이름입니다.', 'error'); return;
+      }
+      await sbInsert('owners', { name, display_name: display, color });
+    }
+    closeModal('ownerModal');
+    await reload();
+    showToast(_editOwnerId ? '✅ 소유자 수정 완료' : '✅ 소유자 추가 완료');
+  } catch(e) {
+    showToast('저장 실패: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteOwner(ownerId, ownerLabel) {
+  const hasAcct = APP.accounts.some(a => a.owner_name === APP.owners.find(o=>String(o.id)===String(ownerId))?.name);
+  if (hasAcct) { showToast(`'${ownerLabel}'에 연결된 계좌가 있어 삭제할 수 없습니다.`, 'error'); return; }
+  if (!confirm(`소유자 '${ownerLabel}'을(를) 삭제하시겠습니까?`)) return;
+  try {
+    await sbDelete('owners', ownerId);
+    await reload();
+    showToast('✅ 소유자 삭제 완료');
+  } catch(e) {
+    showToast('삭제 실패: ' + e.message, 'error');
+  }
 }
 
 // =====================================================================
