@@ -448,9 +448,14 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
   <div class="card" style="margin-top:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="section-title" style="margin-bottom:0">계좌 목록</div>
-      <button class="btn btn-ghost btn-sm" onclick="openAcctModal()">
-        <iconify-icon icon="lucide:plus" width="13"></iconify-icon> 계좌 추가
-      </button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="syncAllAcctNames()" title="모든 거래·입출금·스냅샷의 계좌명을 현재 계좌 목록과 동기화">
+          <iconify-icon icon="lucide:refresh-cw" width="13"></iconify-icon> 계좌명 동기화
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openAcctModal()">
+          <iconify-icon icon="lucide:plus" width="13"></iconify-icon> 계좌 추가
+        </button>
+      </div>
     </div>
     <table>
       <thead><tr><th>계좌 ID</th><th>계좌명</th><th>증권사</th><th>소유자</th><th>유형</th><th>통화</th><th class="text-right">예수금(₩)</th><th></th></tr></thead>
@@ -2846,6 +2851,45 @@ async function saveAcct() {
     closeModal('acctModal');
   } catch(e) { showToast('저장 실패: '+e.message,'error'); }
 }
+async function syncAllAcctNames() {
+  const sb = getSB(); if (!sb) { showToast('Supabase 미연결', 'error'); return; }
+  if (!confirm('모든 거래·입출금·스냅샷의 계좌명을 현재 계좌 목록 기준으로 동기화합니다.\n계속하시겠습니까?')) return;
+  showLoading(true, '계좌명 동기화 중...');
+  try {
+    let updated = 0;
+    for (const acct of APP.accounts) {
+      const tasks = [
+        // acct_id 기준으로 acct_name 업데이트
+        sb.from('trades')   .update({ acct_name: acct.name }).eq('acct_id', acct.id),
+        sb.from('deposits') .update({ acct_name: acct.name }).eq('acct_id', acct.id),
+        sb.from('snapshots').update({ acct_name: acct.name }).eq('acct_id', acct.id),
+      ];
+      const results = await Promise.all(tasks);
+      results.forEach(r => { if (r.data) updated += r.data.length || 0; });
+    }
+    // overrides의 acct_name도 동기화
+    const { data: ovrRows } = await sb.from('settings').select('key,value').like('key','ovr_%__acct_name');
+    if (ovrRows?.length) {
+      for (const row of ovrRows) {
+        // key: ovr_{acct_id}__{code}__acct_name
+        const m = row.key.match(/^ovr_(.+)__[^_]+__acct_name$/);
+        if (!m) continue;
+        const acct = APP.accounts.find(a => a.id === m[1]);
+        if (acct && row.value !== acct.name) {
+          await sb.from('settings').update({ value: acct.name }).eq('key', row.key);
+          updated++;
+        }
+      }
+    }
+    await reload();
+    showToast(`✅ 계좌명 동기화 완료`);
+  } catch(e) {
+    showToast('동기화 실패: ' + e.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
 async function deleteAcct(id) {
   if (!confirm(`계좌 "${id}"를 삭제하시겠습니까?\n거래내역은 삭제되지 않습니다.`)) return;
   try { await sbDelete('accounts', id); await reload(); showToast('삭제 완료'); }
