@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>투자 포트폴리오 트래커 — 화면 목업 v2</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #1a1a2e;
+  --bg2:       #16213e;
+  --bg3:       #0f3460;
+  --bg4:       #0d0d1a;
+  --profit:    #3ecf8e;
+  --loss:      #ff6b6b;
+  --accent:    #4f8ef7;
+  --text:      #e8e8e8;
+  --text2:     #a0a0b0;
+  --text3:     #666688;
+  --border:    #2a2a4a;
+  --border2:   #1e1e38;
+  --card:      #1e1e3a;
+  --input-bg:  #0f1a30;
+  --radius:    10px;
+  --radius-sm: 6px;
+}
+
+body {
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ===== LAYOUT ===== */
+.app-shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.top-bar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 52px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.logo {
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  letter-spacing: -0.03em; white-space: nowrap;
+  display: flex; align-items: center; gap: 7px;
+}
+
+/* ===== OWNER SWITCHER ===== */
+.owner-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.owner-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--text2);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.owner-btn.active {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.owner-btn:hover:not(.active) { color: var(--text); }
+
+.nav-tabs { display: flex; gap: 0; flex: 1; overflow: hidden; }
+
+.nav-tab {
+  padding: 0 14px;
+  height: 52px;
+  display: flex; align-items: center; gap: 5px;
+  cursor: pointer; color: var(--text2);
+  font-size: 12.5px; font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s; white-space: nowrap;
+  background: none; border-left: none; border-right: none; border-top: none;
+}
+
+.nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.exchange-rate {
+  font-size: 11.5px; color: var(--text2); white-space: nowrap; flex-shrink: 0;
+}
+.exchange-rate .rate-val { color: var(--profit); font-weight: 600; }
+
+.content-area { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 24px; }
+
+/* ===== SCREENS ===== */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ===== CARDS ===== */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+
+/* ===== DASHBOARD ===== */
+.summary-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 12px; margin-bottom: 16px; }
+
+.summary-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.summary-card .lbl { font-size: 10.5px; color: var(--text2); margin-bottom: 5px; display: flex; align-items: center; gap: 3px; }
+.summary-card .val { font-size: 19px; font-weight: 700; letter-spacing: -0.03em; }
+.summary-card .sub { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+.profit-val { color: var(--profit) !important; }
+.loss-val   { color: var(--loss)   !important; }
+.accent-val { color: var(--accent) !important; }
+
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.chart-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+.chart-title { font-size: 12.5px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
+.chart-wrap  { height: 195px; position: relative; }
+
+.bottom-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+
+/* ===== TABLES ===== */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+thead th {
+  background: var(--bg2); color: var(--text2); font-weight: 600; font-size: 10.5px;
+  padding: 9px 11px; text-align: left; border-bottom: 1px solid var(--border);
+  white-space: nowrap; letter-spacing: 0;
+}
+tbody tr { border-bottom: 1px solid var(--border2); transition: background 0.1s; }
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+tbody td { padding: 9px 11px; color: var(--text); white-space: nowrap; }
+.text-right  { text-align: right; }
+.text-center { text-align: center; }
+
+/* ===== BADGES ===== */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 600; }
+.badge-blue   { background: rgba(79,142,247,0.15);  color: var(--accent); }
+.badge-green  { background: rgba(62,207,142,0.15);  color: var(--profit); }
+.badge-red    { background: rgba(255,107,107,0.15);  color: var(--loss); }
+.badge-purple { background: rgba(160,100,240,0.15); color: #a064f0; }
+.badge-orange { background: rgba(255,160,80,0.15);  color: #ffa050; }
+.badge-teal   { background: rgba(80,200,200,0.15);  color: #50c8c8; }
+
+.section-title { font-size: 12.5px; font-weight: 700; color: var(--text2); margin-bottom: 11px; display: flex; align-items: center; gap: 5px; }
+
+/* ===== TOP5 ===== */
+.top5-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rank-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border2); }
+.rank-item:last-child { border-bottom: none; }
+.rank-no   { font-size: 11px; color: var(--text3); width: 18px; }
+.rank-name { flex: 1; font-size: 12.5px; padding: 0 7px; }
+.rank-rate { font-size: 12.5px; font-weight: 700; }
+
+/* ===== ACCOUNT CARDS ===== */
+.account-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+.account-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px; cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.account-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.account-card:hover:not(.selected) { border-color: #3a3a6a; }
+.account-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.account-meta { font-size: 11px; color: var(--text2); margin-bottom: 12px; display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.account-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.account-stat .lbl { font-size: 10px; color: var(--text3); margin-bottom: 2px; }
+.account-stat .val { font-size: 13px; font-weight: 600; }
+.account-stat.full { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 3px; }
+.account-rate { font-size: 20px; font-weight: 700; }
+
+/* ===== FILTER BAR ===== */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+.select-input, .text-input {
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  padding: 7px 11px; font-size: 12.5px; outline: none;
+}
+.select-input:focus, .text-input:focus { border-color: var(--accent); }
+
+/* ===== BUTTONS ===== */
+.btn {
+  padding: 7px 15px; border-radius: var(--radius-sm);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; border: none;
+  display: inline-flex; align-items: center; gap: 5px; transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-success { background: var(--profit); color: #0d1a0d; }
+.btn-ghost   { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+.btn-danger  { background: rgba(255,107,107,0.15); color: var(--loss); border: 1px solid rgba(255,107,107,0.3); }
+
+/* ===== SUB TABS ===== */
+.sub-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.sub-tab {
+  padding: 9px 18px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+  color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: none; border-left: none; border-right: none; border-top: none; transition: all 0.15s;
+}
+.sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sub-tab:hover:not(.active) { color: var(--text); }
+
+/* ===== PAGE HEADER ===== */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.page-title  { font-size: 17px; font-weight: 700; letter-spacing: -0.03em; }
+.divider     { height: 1px; background: var(--border); margin: 14px 0; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 600;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text2);
+}
+
+.progress-bar  { height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+.progress-fill { height: 100%; border-radius: 2px; }
+
+/* ===== OWNER BADGE on DATA ===== */
+.owner-tag {
+  display: inline-block; padding: 1px 7px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; background: rgba(255,160,80,0.15); color: #ffa050;
+}
+.owner-tag.me     { background: rgba(79,142,247,0.15); color: var(--accent); }
+.owner-tag.spouse { background: rgba(255,160,80,0.15); color: #ffa050; }
+.owner-tag.dain   { background: rgba(160,100,240,0.15); color: #c084f0; }
+
+/* ===== MODAL ===== */
+.modal-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  width: 580px;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22px;
+}
+.modal-title { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; }
+.modal-close {
+  background: none; border: none; color: var(--text2); cursor: pointer;
+  font-size: 20px; line-height: 1; padding: 2px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; transition: color 0.15s;
+}
+.modal-close:hover { color: var(--text); }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid.full { grid-template-columns: 1fr; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group.span2 { grid-column: 1 / -1; }
+.form-label { font-size: 11.5px; color: var(--text2); font-weight: 600; }
+.form-input {
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  padding: 9px 12px; font-size: 13px; outline: none; width: 100%;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input.auto-filled { background: rgba(62,207,142,0.07); border-color: rgba(62,207,142,0.3); color: var(--profit); }
+.form-hint { font-size: 10.5px; color: var(--text3); }
+
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+
+/* ===== SNAPSHOT SCREEN ===== */
+.snapshot-guide {
+  background: rgba(79,142,247,0.07);
+  border: 1px solid rgba(79,142,247,0.2);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: 12.5px;
+  color: var(--text2);
+  margin-bottom: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+/* ===== SETTINGS ===== */
+.settings-section { max-width: 920px; }
+.settings-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.rate-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; margin-top: 16px;
+}
+.rate-main { font-size: 26px; font-weight: 700; color: var(--accent); }
+.rate-meta { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ===== TOP BAR ===== -->
+<nav class="top-bar">
+  <div class="logo">
+    <iconify-icon icon="lucide:bar-chart-2" width="17"></iconify-icon>
+    포트폴리오 트래커
+  </div>
+
+  <!-- 소유자 전환 -->
+  <div class="owner-switcher">
+    <button class="owner-btn active" onclick="switchOwner(this,'all')">전체</button>
+    <button class="owner-btn" onclick="switchOwner(this,'me')">나</button>
+    <button class="owner-btn" onclick="switchOwner(this,'spouse')">상미</button>
+    <button class="owner-btn" onclick="switchOwner(this,'dain')">다인</button>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showScreen('dashboard')">🎯 대시보드</button>
+    <button class="nav-tab" onclick="showScreen('accounts')">🏦 계좌현황</button>
+    <button class="nav-tab" onclick="showScreen('stocks')">📈 종목현황</button>
+    <button class="nav-tab" onclick="showScreen('monthly')">📉 월별현황</button>
+    <button class="nav-tab" onclick="showScreen('trades')">📋 거래내역</button>
+    <button class="nav-tab" onclick="showScreen('cashflow')">💰 입출금·배당</button>
+    <button class="nav-tab" onclick="showScreen('snapshot')">📅 월말스냅샷</button>
+    <button class="nav-tab" onclick="showScreen('settings')">⚙ 설정</button>
+  </div>
+
+  <div class="exchange-rate">
+    USD/KRW &nbsp;<span class="rate-val">1,452.3</span>
+    <span style="color:var(--text3);font-size:10px;">&nbsp;실시간</span>
+  </div>
+</nav>
+
+<div class="content-area">
+
+<!-- ===================== 1. 대시보드 ===================== -->
+<div class="screen active" id="screen-dashboard">
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="lbl"><iconify-icon icon="lucide:wallet" width="11"></iconify-icon> 총 평가금</div>
+      <div class="val">8,217만원</div>
+      <div class="sub">₩82,170,000</div>
+    </div>
+    <div class="summary-card">
+      <div class="lbl"><iconify-icon icon="lucide:trending-up" width="11"></iconify-icon> 총 투자금</div>
+      <div class="val">6,943만원</div>
+      <div class="sub">₩69,430,000</div>
+    </div>
+    <div class="summary-card">
+      <div class="lbl"><iconify-icon icon="lucide:plus-circle" width="11"></iconify-icon> 총 수익금</div>
+      <div class="val profit-val">+1,274만원</div>
+      <div class="sub profit-val">+18.35%</div>
+    </div>
+    <div class="summary-card">
+      <div class="lbl"><iconify-icon icon="lucide:gift" width="11"></iconify-icon> 배당 누계</div>
+      <div class="val">324,500원</div>
+      <div class="sub">연환산 0.47%</div>
+    </div>
+    <div class="summary-card">
+      <div class="lbl"><iconify-icon icon="lucide:arrow-down-circle" width="11"></iconify-icon> 누적 입금</div>
+      <div class="val">6,750만원</div>
+      <div class="sub">2024-01 ~ 현재</div>
+    </div>
+    <div class="summary-card">
+      <div class="lbl"><iconify-icon icon="lucide:refresh-cw" width="11"></iconify-icon> 실시간 환율</div>
+      <div class="val accent-val">1,452.3</div>
+      <div class="sub">원/달러 자동</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">📊 누적 자금 흐름 (입금 vs 평가금)</div>
+      <div class="chart-wrap"><canvas id="areaChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📊 월별 수익</div>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="card">
+      <div class="section-title"><iconify-icon icon="lucide:credit-card" width="13"></iconify-icon> 계좌별 현황</div>
+      <table>
+        <thead><tr><th>계좌명</th><th>소유자</th><th>유형</th><th class="text-right">평가금(₩)</th><th class="text-right">수익률</th><th class="text-right">비중</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>토스_본계좌</strong></td>
+            <td><span class="owner-tag me">나</span></td>
+            <td><span class="badge badge-blue">해외</span></td>
+            <td class="text-right">5,348만원</td>
+            <td class="text-right profit-val">+22.4%</td>
+            <td class="text-right">65.1%<div class="progress-bar"><div class="progress-fill" style="width:65%;background:var(--accent)"></div></div></td>
+          </tr>
+          <tr>
+            <td><strong>키움_ISA</strong></td>
+            <td><span class="owner-tag me">나</span></td>
+            <td><span class="badge badge-green">ISA</span></td>
+            <td class="text-right">1,821만원</td>
+            <td class="text-right profit-val">+12.8%</td>
+            <td class="text-right">22.2%<div class="progress-bar"><div class="progress-fill" style="width:22%;background:var(--profit)"></div></div></td>
+          </tr>
+          <tr>
+            <td><strong>키움_IRP</strong></td>
+            <td><span class="owner-tag me">나</span></td>
+            <td><span class="badge badge-purple">IRP</span></td>
+            <td class="text-right">1,048만원</td>
+            <td class="text-right profit-val">+9.1%</td>
+            <td class="text-right">12.7%<div class="progress-bar"><div class="progress-fill" style="width:12.7%;background:#a064f0"></div></div></td>
+          </tr>
+          <tr style="opacity:0.6">
+            <td><strong>상미_ISA</strong></td>
+            <td><span class="owner-tag spouse">상미</span></td>
+            <td><span class="badge badge-green">ISA</span></td>
+            <td class="text-right" style="color:var(--text2)">— (예정)</td>
+            <td class="text-right" style="color:var(--text2)">—</td>
+            <td class="text-right" style="color:var(--text2)">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="top5-grid">
+        <div>
+          <div class="section-title" style="color:var(--profit)"><iconify-icon icon="lucide:trending-up" width="13"></iconify-icon> TOP 5</div>
+          <div class="rank-item"><div class="rank-no">1</div><div class="rank-name">QLD<br><span style="font-size:10.5px;color:var(--text2)">토스_본계좌</span></div><div class="rank-rate profit-val">+34.2%</div></div>
+          <div class="rank-item"><div class="rank-no">2</div><div class="rank-name">AAPL<br><span style="font-size:10.5px;color:var(--text2)">토스_본계좌</span></div><div class="rank-rate profit-val">+21.8%</div></div>
+          <div class="rank-item"><div class="rank-no">3</div><div class="rank-name">TIGER나스닥100<br><span style="font-size:10.5px;color:var(--text2)">키움_ISA</span></div><div class="rank-rate profit-val">+15.6%</div></div>
+          <div class="rank-item"><div class="rank-no">4</div><div class="rank-name">TIGER S&P500<br><span style="font-size:10.5px;color:var(--text2)">키움_IRP</span></div><div class="rank-rate profit-val">+9.1%</div></div>
+          <div class="rank-item"><div class="rank-no">5</div><div class="rank-name">SOXX<br><span style="font-size:10.5px;color:var(--text2)">토스_본계좌</span></div><div class="rank-rate profit-val">+7.2%</div></div>
+        </div>
+        <div>
+          <div class="section-title" style="color:var(--loss)"><iconify-icon icon="lucide:trending-down" width="13"></iconify-icon> BOTTOM 5</div>
+          <div class="rank-item"><div class="rank-no">1</div><div class="rank-name">KODEX S&P500<br><span style="font-size:10.5px;color:var(--text2)">키움_ISA</span></div><div class="rank-rate profit-val">+8.3%</div></div>
+          <div class="rank-item" style="opacity:0.3"><div class="rank-no">2</div><div class="rank-name">—</div><div class="rank-rate">—</div></div>
+          <div class="rank-item" style="opacity:0.3"><div class="rank-no">3</div><div class="rank-name">—</div><div class="rank-rate">—</div></div>
+          <div class="rank-item" style="opacity:0.3"><div class="rank-no">4</div><div class="rank-name">—</div><div class="rank-rate">—</div></div>
+          <div class="rank-item" style="opacity:0.3"><div class="rank-no">5</div><div class="rank-name">—</div><div class="rank-rate">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /dashboard -->
+
+
+<!-- ===================== 2. 계좌현황 ===================== -->
+<div class="screen" id="screen-accounts">
+  <div class="page-header">
+    <div class="page-title">🏦 계좌현황</div>
+  </div>
+  <div class="account-cards">
+    <div class="account-card selected" onclick="selectAccount(this,'toss')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="account-name">토스_본계좌</div>
+        <span class="owner-tag me">나</span>
+      </div>
+      <div class="account-meta"><span class="badge badge-blue">해외</span><span>토스증권</span><span>USD</span></div>
+      <div class="account-stats">
+        <div class="account-stat"><div class="lbl">투자금</div><div class="val">4,366만원</div></div>
+        <div class="account-stat"><div class="lbl">평가금</div><div class="val">5,348만원</div></div>
+        <div class="account-stat"><div class="lbl">수익금</div><div class="val profit-val">+982만원</div></div>
+        <div class="account-stat"><div class="lbl">비중</div><div class="val">65.1%</div></div>
+        <div class="account-stat full"><div class="lbl">총 수익률</div><div class="account-rate profit-val">+22.4%</div></div>
+      </div>
+    </div>
+    <div class="account-card" onclick="selectAccount(this,'isa')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="account-name">키움_ISA</div>
+        <span class="owner-tag me">나</span>
+      </div>
+      <div class="account-meta"><span class="badge badge-green">ISA</span><span>키움증권</span><span>KRW</span></div>
+      <div class="account-stats">
+        <div class="account-stat"><div class="lbl">투자금</div><div class="val">1,614만원</div></div>
+        <div class="account-stat"><div class="lbl">평가금</div><div class="val">1,821만원</div></div>
+        <div class="account-stat"><div class="lbl">수익금</div><div class="val profit-val">+207만원</div></div>
+        <div class="account-stat"><div class="lbl">비중</div><div class="val">22.2%</div></div>
+        <div class="account-stat full"><div class="lbl">총 수익률</div><div class="account-rate profit-val">+12.8%</div></div>
+      </div>
+    </div>
+    <div class="account-card" onclick="selectAccount(this,'irp')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="account-name">키움_IRP</div>
+        <span class="owner-tag me">나</span>
+      </div>
+      <div class="account-meta"><span class="badge badge-purple">IRP</span><span>키움증권</span><span>KRW</span></div>
+      <div class="account-stats">
+        <div class="account-stat"><div class="lbl">투자금</div><div class="val">960만원</div></div>
+        <div class="account-stat"><div class="lbl">평가금</div><div class="val">1,048만원</div></div>
+        <div class="account-stat"><div class="lbl">수익금</div><div class="val profit-val">+88만원</div></div>
+        <div class="account-stat"><div class="lbl">비중</div><div class="val">12.7%</div></div>
+        <div class="account-stat full"><div class="lbl">총 수익률</div><div class="account-rate profit-val">+9.1%</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title" id="account-detail-title"><iconify-icon icon="lucide:list" width="13"></iconify-icon> 토스_본계좌 보유 종목</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>종목코드</th><th>종목명</th><th class="text-right">수량</th><th class="text-right">평단가</th><th class="text-right">현재가</th><th class="text-right">평가금(₩)</th><th class="text-right">수익금(₩)</th><th class="text-right">수익률</th></tr></thead>
+        <tbody id="account-detail-body">
+          <tr><td><span class="badge badge-blue">AAPL</span></td><td>애플</td><td class="text-right">15주</td><td class="text-right">$163.2</td><td class="text-right">$198.5</td><td class="text-right">4,328,123</td><td class="text-right profit-val">+769,050</td><td class="text-right profit-val">+21.6%</td></tr>
+          <tr><td><span class="badge badge-blue">QLD</span></td><td>나스닥2X레버리지</td><td class="text-right">30주</td><td class="text-right">$71.0</td><td class="text-right">$95.3</td><td class="text-right">4,158,090</td><td class="text-right profit-val">+1,059,060</td><td class="text-right profit-val">+34.2%</td></tr>
+          <tr><td><span class="badge badge-blue">SOXX</span></td><td>반도체ETF</td><td class="text-right">10주</td><td class="text-right">$185.3</td><td class="text-right">$198.7</td><td class="text-right">2,887,890</td><td class="text-right profit-val">+194,610</td><td class="text-right profit-val">+7.2%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /accounts -->
+
+
+<!-- ===================== 3. 종목현황 ===================== -->
+<div class="screen" id="screen-stocks">
+  <div class="page-header"><div class="page-title">📈 종목현황</div></div>
+  <div class="filter-bar">
+    <select class="select-input"><option>전체 계좌</option><option>토스_본계좌</option><option>키움_ISA</option><option>키움_IRP</option></select>
+    <select class="select-input"><option>전체 유형</option><option>해외</option><option>ISA</option><option>IRP</option></select>
+    <input class="text-input" placeholder="종목명/코드 검색..." style="width:190px">
+    <div style="margin-left:auto;font-size:11.5px;color:var(--text2)">보유 종목 6개 · 총 평가금 82,170,000원</div>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>소유자</th><th>계좌</th><th>유형</th><th>종목코드</th><th>종목명</th><th class="text-right">수량</th><th class="text-right">평단가</th><th class="text-right">현재가</th><th class="text-right">평가금(₩)</th><th class="text-right">투자금(₩)</th><th class="text-right">수익금(₩)</th><th class="text-right">수익률</th><th class="text-right">비중</th></tr></thead>
+        <tbody>
+          <tr><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="badge badge-blue">해외</span></td><td><strong>AAPL</strong></td><td>애플</td><td class="text-right">15</td><td class="text-right">$163.2</td><td class="text-right">$198.5</td><td class="text-right">4,328,123</td><td class="text-right">3,559,073</td><td class="text-right profit-val">+769,050</td><td class="text-right profit-val">+21.6%</td><td class="text-right">5.3%</td></tr>
+          <tr><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="badge badge-blue">해외</span></td><td><strong>QLD</strong></td><td>나스닥2X</td><td class="text-right">30</td><td class="text-right">$71.0</td><td class="text-right">$95.3</td><td class="text-right">4,158,090</td><td class="text-right">3,099,030</td><td class="text-right profit-val">+1,059,060</td><td class="text-right profit-val">+34.2%</td><td class="text-right">5.1%</td></tr>
+          <tr><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="badge badge-blue">해외</span></td><td><strong>SOXX</strong></td><td>반도체ETF</td><td class="text-right">10</td><td class="text-right">$185.3</td><td class="text-right">$198.7</td><td class="text-right">2,887,890</td><td class="text-right">2,693,280</td><td class="text-right profit-val">+194,610</td><td class="text-right profit-val">+7.2%</td><td class="text-right">3.5%</td></tr>
+          <tr><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td><span class="badge badge-green">ISA</span></td><td><strong>133690</strong></td><td>TIGER 나스닥100</td><td class="text-right">50</td><td class="text-right">15,420원</td><td class="text-right">17,830원</td><td class="text-right">891,500</td><td class="text-right">771,000</td><td class="text-right profit-val">+120,500</td><td class="text-right profit-val">+15.6%</td><td class="text-right">1.1%</td></tr>
+          <tr><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td><span class="badge badge-green">ISA</span></td><td><strong>379800</strong></td><td>KODEX S&P500</td><td class="text-right">30</td><td class="text-right">12,850원</td><td class="text-right">13,920원</td><td class="text-right">417,600</td><td class="text-right">385,500</td><td class="text-right profit-val">+32,100</td><td class="text-right profit-val">+8.3%</td><td class="text-right">0.5%</td></tr>
+          <tr><td><span class="owner-tag me">나</span></td><td>키움_IRP</td><td><span class="badge badge-purple">IRP</span></td><td><strong>360750</strong></td><td>TIGER 미국S&P500</td><td class="text-right">40</td><td class="text-right">14,200원</td><td class="text-right">15,490원</td><td class="text-right">619,600</td><td class="text-right">568,000</td><td class="text-right profit-val">+51,600</td><td class="text-right profit-val">+9.1%</td><td class="text-right">0.8%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /stocks -->
+
+
+<!-- ===================== 4. 월별현황 ===================== -->
+<div class="screen" id="screen-monthly">
+  <div class="page-header"><div class="page-title">📉 월별현황</div></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="chart-title">📊 누적 자금 흐름</div>
+    <div style="height:260px;position:relative"><canvas id="monthlyAreaChart"></canvas></div>
+  </div>
+  <div class="card">
+    <table>
+      <thead><tr><th>년월</th><th class="text-right">총 평가금(₩)</th><th class="text-right">누적입금(₩)</th><th class="text-right">월 수익(₩)</th><th class="text-right">누적 수익률</th></tr></thead>
+      <tbody>
+        <tr><td>2026-04</td><td class="text-right">82,170,000</td><td class="text-right">67,500,000</td><td class="text-right profit-val">+2,840,000</td><td class="text-right profit-val">+18.35%</td></tr>
+        <tr><td>2026-03</td><td class="text-right">79,330,000</td><td class="text-right">67,500,000</td><td class="text-right profit-val">+1,620,000</td><td class="text-right profit-val">+14.25%</td></tr>
+        <tr><td>2026-02</td><td class="text-right">77,710,000</td><td class="text-right">67,500,000</td><td class="text-right profit-val">+3,210,000</td><td class="text-right profit-val">+11.88%</td></tr>
+        <tr><td>2026-01</td><td class="text-right">74,500,000</td><td class="text-right">67,500,000</td><td class="text-right loss-val">-980,000</td><td class="text-right profit-val">+7.22%</td></tr>
+        <tr><td>2025-12</td><td class="text-right">75,480,000</td><td class="text-right">62,000,000</td><td class="text-right profit-val">+4,380,000</td><td class="text-right profit-val">+14.53%</td></tr>
+        <tr><td>2025-11</td><td class="text-right">71,100,000</td><td class="text-right">62,000,000</td><td class="text-right profit-val">+2,100,000</td><td class="text-right profit-val">+9.59%</td></tr>
+        <tr><td>2025-10</td><td class="text-right">69,000,000</td><td class="text-right">62,000,000</td><td class="text-right loss-val">-1,200,000</td><td class="text-right profit-val">+6.45%</td></tr>
+        <tr><td>2025-09</td><td class="text-right">70,200,000</td><td class="text-right">62,000,000</td><td class="text-right profit-val">+1,700,000</td><td class="text-right profit-val">+8.26%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div><!-- /monthly -->
+
+
+<!-- ===================== 5. 거래내역 ===================== -->
+<div class="screen" id="screen-trades">
+  <div class="page-header">
+    <div class="page-title">📋 거래내역</div>
+    <button class="btn btn-primary" onclick="openTradeModal()">
+      <iconify-icon icon="lucide:plus" width="13"></iconify-icon> 거래 입력
+    </button>
+  </div>
+  <div class="filter-bar">
+    <select class="select-input"><option>전체 계좌</option><option>토스_본계좌</option><option>키움_ISA</option><option>키움_IRP</option></select>
+    <select class="select-input"><option>전체</option><option>매수</option><option>매도</option></select>
+    <input class="text-input" type="date" value="2025-01-01">
+    <span style="color:var(--text2)">~</span>
+    <input class="text-input" type="date" value="2026-04-25">
+    <button class="btn btn-ghost">초기화</button>
+    <div style="margin-left:auto;font-size:11.5px;color:var(--text2)">총 12건</div>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>소유자</th><th>계좌</th><th>통화</th><th>종목코드</th><th>종목명</th><th class="text-center">구분</th><th class="text-right">수량</th><th class="text-right">단가</th><th class="text-right">수수료</th><th class="text-right">환율</th><th class="text-right">원화환산단가</th><th>메모</th></tr></thead>
+        <tbody>
+          <tr><td>2026-04-10</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="chip">USD</span></td><td>AAPL</td><td>애플</td><td class="text-center"><span class="badge badge-blue">매수</span></td><td class="text-right">5</td><td class="text-right">$196.3</td><td class="text-right">$0.99</td><td class="text-right">1,448</td><td class="text-right">284,242원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-03-15</td><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td><span class="chip">KRW</span></td><td>133690</td><td>TIGER 나스닥100</td><td class="text-center"><span class="badge badge-blue">매수</span></td><td class="text-right">20</td><td class="text-right">15,420원</td><td class="text-right">153원</td><td class="text-right">—</td><td class="text-right">15,420원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-02-20</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="chip">USD</span></td><td>QLD</td><td>나스닥2X레버리지</td><td class="text-center"><span class="badge badge-blue">매수</span></td><td class="text-right">10</td><td class="text-right">$88.5</td><td class="text-right">$0.99</td><td class="text-right">1,436</td><td class="text-right">127,086원</td><td style="color:var(--text3)">추가매수</td></tr>
+          <tr><td>2026-01-08</td><td><span class="owner-tag me">나</span></td><td>키움_IRP</td><td><span class="chip">KRW</span></td><td>360750</td><td>TIGER 미국S&P500</td><td class="text-center"><span class="badge badge-blue">매수</span></td><td class="text-right">40</td><td class="text-right">14,200원</td><td class="text-right">283원</td><td class="text-right">—</td><td class="text-right">14,200원</td><td style="color:var(--text3)">IRP 연간납입</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /trades -->
+
+
+<!-- ===================== 6. 입출금·배당 ===================== -->
+<div class="screen" id="screen-cashflow">
+  <div class="page-header">
+    <div class="page-title">💰 입출금 · 🎁 배당</div>
+    <button class="btn btn-primary"><iconify-icon icon="lucide:plus" width="13"></iconify-icon> 내역 입력</button>
+  </div>
+  <div class="sub-tabs">
+    <button class="sub-tab active" onclick="switchCashTab(this,'deposit')">💰 입출금</button>
+    <button class="sub-tab" onclick="switchCashTab(this,'dividend')">🎁 배당내역</button>
+  </div>
+
+  <!-- 배당 요약 + 차트 (배당 탭에서만 표시) -->
+  <div id="div-chart-section" style="display:none;margin-bottom:16px">
+    <!-- 배당 요약 카드 -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+      <div class="card">
+        <div class="lbl" style="font-size:10.5px;color:var(--text2);margin-bottom:5px"><iconify-icon icon="lucide:gift" width="11"></iconify-icon> 전체 배당 누계</div>
+        <div style="font-size:19px;font-weight:700;color:var(--profit)">324,500원</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">2025 ~ 2026</div>
+      </div>
+      <div class="card">
+        <div class="lbl" style="font-size:10.5px;color:var(--text2);margin-bottom:5px"><iconify-icon icon="lucide:calendar" width="11"></iconify-icon> 올해 배당(2026)</div>
+        <div style="font-size:19px;font-weight:700;color:var(--profit)">12,193원</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">2건</div>
+      </div>
+      <div class="card">
+        <div class="lbl" style="font-size:10.5px;color:var(--text2);margin-bottom:5px"><iconify-icon icon="lucide:trending-up" width="11"></iconify-icon> 전년도(2025)</div>
+        <div style="font-size:19px;font-weight:700;color:var(--profit)">312,307원</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">1건</div>
+      </div>
+      <div class="card">
+        <div class="lbl" style="font-size:10.5px;color:var(--text2);margin-bottom:5px"><iconify-icon icon="lucide:percent" width="11"></iconify-icon> 배당수익률 (연환산)</div>
+        <div style="font-size:19px;font-weight:700">0.47%</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">평가금 대비</div>
+      </div>
+    </div>
+
+    <!-- 배당 추이 차트 -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="chart-title" style="margin:0">📊 배당 추이 — 월별 배당금(₩)</div>
+        <!-- 연도 필터 -->
+        <div style="display:flex;gap:4px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;padding:3px">
+          <button class="owner-btn active" onclick="switchDivYear(this,'all')">전체</button>
+          <button class="owner-btn" onclick="switchDivYear(this,'2025')">2025</button>
+          <button class="owner-btn" onclick="switchDivYear(this,'2026')">2026</button>
+        </div>
+      </div>
+      <div style="height:200px;position:relative"><canvas id="divChart"></canvas></div>
+    </div>
+  </div>
+
+  <div id="cash-deposit">
+    <div class="card">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>날짜</th><th>소유자</th><th>계좌</th><th class="text-center">구분</th><th class="text-right">금액(₩)</th><th class="text-right">환율</th><th class="text-right">달러환산</th><th>메모</th></tr></thead>
+          <tbody>
+            <tr><td>2026-04-01</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td class="text-center"><span class="badge badge-blue">입금</span></td><td class="text-right">3,000,000원</td><td class="text-right">1,452</td><td class="text-right">$2,066</td><td style="color:var(--text3)">4월 정기납입</td></tr>
+            <tr><td>2026-01-02</td><td><span class="owner-tag me">나</span></td><td>키움_IRP</td><td class="text-center"><span class="badge badge-blue">입금</span></td><td class="text-right">5,000,000원</td><td class="text-right">—</td><td class="text-right">—</td><td style="color:var(--text3)">IRP 연간납입 세액공제용</td></tr>
+            <tr><td>2025-12-30</td><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td class="text-center"><span class="badge badge-blue">입금</span></td><td class="text-right">10,000,000원</td><td class="text-right">—</td><td class="text-right">—</td><td style="color:var(--text3)">ISA 연납입 한도</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div id="cash-dividend" style="display:none">
+    <div class="card">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>날짜</th><th>소유자</th><th>계좌</th><th>통화</th><th>종목코드</th><th>종목명</th><th class="text-right">배당금</th><th class="text-right">환율</th><th class="text-right">원화환산</th><th>메모</th></tr></thead>
+          <tbody>
+            <tr><td>2026-03-14</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="chip">USD</span></td><td>AAPL</td><td>애플</td><td class="text-right profit-val">$4.25</td><td class="text-right">1,448</td><td class="text-right profit-val">6,154원</td><td style="color:var(--text3)">분기배당 Q1</td></tr>
+            <tr><td>2025-12-13</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="chip">USD</span></td><td>AAPL</td><td>애플</td><td class="text-right profit-val">$4.25</td><td class="text-right">1,421</td><td class="text-right profit-val">6,039원</td><td style="color:var(--text3)">분기배당 Q4</td></tr>
+            <tr><td>2025-10-10</td><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td><span class="chip">KRW</span></td><td>133690</td><td>TIGER 나스닥100</td><td class="text-right profit-val">18,200원</td><td class="text-right">—</td><td class="text-right profit-val">18,200원</td><td style="color:var(--text3)">반기배당</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /cashflow -->
+
+
+<!-- ===================== 7. 월말스냅샷 ===================== -->
+<div class="screen" id="screen-snapshot">
+  <div class="page-header">
+    <div class="page-title">📅 월말스냅샷</div>
+    <button class="btn btn-primary" onclick="openSnapshotModal()">
+      <iconify-icon icon="lucide:plus" width="13"></iconify-icon> 이번 달 기록
+    </button>
+  </div>
+
+  <div class="snapshot-guide">
+    <iconify-icon icon="lucide:info" width="16" style="color:var(--accent);flex-shrink:0;margin-top:1px"></iconify-icon>
+    <div>
+      <strong style="color:var(--text)">월 1회, 말일에 각 계좌 총액을 입력해주세요.</strong><br>
+      증권사 앱에서 확인한 계좌 총액을 기록하면, 월별현황 차트가 자동으로 업데이트됩니다.
+      소요시간 약 1~2분 · 현재가는 GOOGLEFINANCE 자동조회라 직접 입력 불필요
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div class="card" style="border-color:rgba(62,207,142,0.3)">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">2026년 4월 기록 현황</div>
+      <div style="display:flex;gap:20px">
+        <div><div style="font-size:10px;color:var(--text3)">기록 완료</div><div style="font-size:20px;font-weight:700;color:var(--profit)">3개</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">미기록</div><div style="font-size:20px;font-weight:700;color:var(--loss)">0개</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">기록일</div><div style="font-size:14px;font-weight:600">2026-04-30</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">최근 기록 요약 (2026-04-30)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12.5px">
+          토스_본계좌 &nbsp;<strong>5,348만원</strong>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12.5px">
+          키움_ISA &nbsp;<strong>1,821만원</strong>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12.5px">
+          키움_IRP &nbsp;<strong>1,048만원</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">스냅샷 기록 이력</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>년월</th><th>소유자</th><th>계좌</th><th>유형</th><th class="text-right">계좌총액</th><th class="text-right">환율</th><th class="text-right">원화환산</th><th>메모</th></tr></thead>
+        <tbody>
+          <tr><td>2026-04</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="badge badge-blue">해외</span></td><td class="text-right">$36,800</td><td class="text-right">1,452</td><td class="text-right">53,433,600원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-04</td><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td><span class="badge badge-green">ISA</span></td><td class="text-right">18,210,000원</td><td class="text-right">—</td><td class="text-right">18,210,000원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-04</td><td><span class="owner-tag me">나</span></td><td>키움_IRP</td><td><span class="badge badge-purple">IRP</span></td><td class="text-right">10,480,000원</td><td class="text-right">—</td><td class="text-right">10,480,000원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-03</td><td><span class="owner-tag me">나</span></td><td>토스_본계좌</td><td><span class="badge badge-blue">해외</span></td><td class="text-right">$35,200</td><td class="text-right">1,440</td><td class="text-right">50,688,000원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-03</td><td><span class="owner-tag me">나</span></td><td>키움_ISA</td><td><span class="badge badge-green">ISA</span></td><td class="text-right">17,850,000원</td><td class="text-right">—</td><td class="text-right">17,850,000원</td><td style="color:var(--text3)">—</td></tr>
+          <tr><td>2026-03</td><td><span class="owner-tag me">나</span></td><td>키움_IRP</td><td><span class="badge badge-purple">IRP</span></td><td class="text-right">10,120,000원</td><td class="text-right">—</td><td class="text-right">10,120,000원</td><td style="color:var(--text3)">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /snapshot -->
+
+
+<!-- ===================== 8. 설정 ===================== -->
+<div class="screen" id="screen-settings">
+  <div class="page-title" style="margin-bottom:20px">⚙ 설정</div>
+  <div class="settings-section">
+
+    <div class="settings-header">
+      <div class="section-title" style="margin:0"><iconify-icon icon="lucide:users" width="13"></iconify-icon> 소유자 관리</div>
+      <button class="btn btn-ghost"><iconify-icon icon="lucide:plus" width="12"></iconify-icon> 소유자 추가</button>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <table>
+        <thead><tr><th>소유자 ID</th><th>이름</th><th>표시명</th><th>메모</th><th class="text-center">관리</th></tr></thead>
+        <tbody>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">P01</code></td><td>이씨 본인</td><td><span class="owner-tag me">나</span></td><td style="color:var(--text3)">기본 소유자</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">P02</code></td><td>상미</td><td><span class="owner-tag spouse">상미</span></td><td style="color:var(--text3)">상미 계좌 관리</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">P03</code></td><td>다인</td><td><span class="owner-tag dain">다인</span></td><td style="color:var(--text3)">자녀 계좌 관리</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="settings-header">
+      <div class="section-title" style="margin:0"><iconify-icon icon="lucide:credit-card" width="13"></iconify-icon> 계좌 목록</div>
+      <button class="btn btn-primary"><iconify-icon icon="lucide:plus" width="12"></iconify-icon> 계좌 추가</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>계좌 ID</th><th>소유자</th><th>계좌명</th><th>증권사</th><th>계좌유형</th><th>기준통화</th><th>메모</th><th class="text-center">관리</th></tr></thead>
+        <tbody>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">A01</code></td><td><span class="owner-tag me">나</span></td><td><strong>토스_본계좌</strong></td><td>토스증권</td><td><span class="badge badge-blue">해외</span></td><td><span class="chip">USD</span></td><td style="color:var(--text3)">미국주식 전용</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">A02</code></td><td><span class="owner-tag me">나</span></td><td><strong>키움_ISA</strong></td><td>키움증권</td><td><span class="badge badge-green">ISA</span></td><td><span class="chip">KRW</span></td><td style="color:var(--text3)">비과세 한도 2천만원</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">A03</code></td><td><span class="owner-tag me">나</span></td><td><strong>키움_IRP</strong></td><td>키움증권</td><td><span class="badge badge-purple">IRP</span></td><td><span class="chip">KRW</span></td><td style="color:var(--text3)">퇴직연금 세액공제</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+          <tr><td><code style="color:var(--accent);font-size:11.5px">A04</code></td><td><span class="owner-tag spouse">상미</span></td><td><strong>상미_ISA</strong></td><td>—</td><td><span class="badge badge-green">ISA</span></td><td><span class="chip">KRW</span></td><td style="color:var(--text3)">추가 예정</td><td class="text-center"><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px">수정</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-title"><iconify-icon icon="lucide:refresh-cw" width="13"></iconify-icon> 실시간 환율</div>
+    <div class="rate-card">
+      <div>
+        <div style="font-size:11.5px;color:var(--text2);margin-bottom:5px">USD / KRW</div>
+        <div class="rate-main">1,452.30 원</div>
+        <div class="rate-meta">GOOGLEFINANCE("CURRENCY:USDKRW") · 자동 갱신 · 2026-04-25 15:32</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11.5px;color:var(--text2);margin-bottom:5px">전일 대비</div>
+        <div style="font-size:18px;font-weight:700;color:var(--profit)">▲ +3.20</div>
+        <div style="font-size:11.5px;color:var(--text2)">+0.22%</div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /settings -->
+
+</div><!-- /content-area -->
+</div><!-- /app-shell -->
+
+
+<!-- ===================== 거래 입력 모달 ===================== -->
+<div class="modal-backdrop" id="tradeModal" onclick="closeModal('tradeModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title"><iconify-icon icon="lucide:plus-circle" width="16" style="color:var(--accent)"></iconify-icon> &nbsp;거래 입력</div>
+      <button class="modal-close" onclick="closeModal('tradeModal')"><iconify-icon icon="lucide:x" width="18"></iconify-icon></button>
+    </div>
+
+    <div class="form-grid">
+      <!-- 날짜 -->
+      <div class="form-group">
+        <label class="form-label">날짜</label>
+        <input class="form-input" type="date" value="2026-04-25">
+      </div>
+      <!-- 소유자 -->
+      <div class="form-group">
+        <label class="form-label">소유자</label>
+        <select class="form-input">
+          <option>나</option>
+          <option>상미</option>
+          <option>다인</option>
+        </select>
+      </div>
+      <!-- 계좌 -->
+      <div class="form-group">
+        <label class="form-label">계좌</label>
+        <select class="form-input" onchange="onAccountChange(this)">
+          <option value="">계좌 선택...</option>
+          <option value="toss">토스_본계좌 (해외 · USD)</option>
+          <option value="isa">키움_ISA (ISA · KRW)</option>
+          <option value="irp">키움_IRP (IRP · KRW)</option>
+        </select>
+      </div>
+      <!-- 구분 -->
+      <div class="form-group">
+        <label class="form-label">구분</label>
+        <select class="form-input">
+          <option>매수</option>
+          <option>매도</option>
+        </select>
+      </div>
+      <!-- 종목코드 -->
+      <div class="form-group">
+        <label class="form-label">종목코드</label>
+        <input class="form-input" placeholder="AAPL / 360750">
+      </div>
+      <!-- 종목명 -->
+      <div class="form-group">
+        <label class="form-label">종목명</label>
+        <input class="form-input" placeholder="애플 / TIGER S&P500">
+      </div>
+      <!-- 수량 -->
+      <div class="form-group">
+        <label class="form-label">수량</label>
+        <input class="form-input" type="number" placeholder="0">
+      </div>
+      <!-- 단가 -->
+      <div class="form-group">
+        <label class="form-label">단가 <span id="price-unit" style="color:var(--text3);font-weight:400">(달러)</span></label>
+        <input class="form-input" type="number" placeholder="0.00" step="0.01">
+      </div>
+      <!-- 수수료 -->
+      <div class="form-group">
+        <label class="form-label">수수료</label>
+        <input class="form-input" type="number" placeholder="0" value="0">
+      </div>
+      <!-- 환율 -->
+      <div class="form-group" id="fx-group">
+        <label class="form-label">환율 <span style="color:var(--profit);font-size:10.5px;font-weight:400">● GOOGLEFINANCE 자동입력</span></label>
+        <input class="form-input auto-filled" id="fx-input" type="number" value="1452.3">
+        <div class="form-hint">거래 당시 환율과 다르면 수정하세요</div>
+      </div>
+      <!-- 원화환산단가 (자동) -->
+      <div class="form-group" id="krw-unit-group">
+        <label class="form-label">원화환산 단가 <span style="color:var(--text3);font-size:10.5px;font-weight:400">🔒 자동</span></label>
+        <input class="form-input" style="opacity:0.5;pointer-events:none" placeholder="단가 × 환율">
+      </div>
+      <!-- 메모 -->
+      <div class="form-group span2">
+        <label class="form-label">메모 (선택)</label>
+        <input class="form-input" placeholder="추가 매수, 분할 매도 등...">
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('tradeModal')">취소</button>
+      <button class="btn btn-success"><iconify-icon icon="lucide:check" width="13"></iconify-icon> 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 월말스냅샷 입력 모달 ===================== -->
+<div class="modal-backdrop" id="snapshotModal" onclick="closeModal('snapshotModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title"><iconify-icon icon="lucide:calendar-check" width="16" style="color:var(--accent)"></iconify-icon> &nbsp;월말스냅샷 입력</div>
+      <button class="modal-close" onclick="closeModal('snapshotModal')"><iconify-icon icon="lucide:x" width="18"></iconify-icon></button>
+    </div>
+
+    <div style="font-size:12px;color:var(--text2);background:var(--bg4);border-radius:6px;padding:10px 14px;margin-bottom:18px">
+      💡 증권사 앱에서 계좌별 총액을 확인 후 입력하세요. 월 1회만 기록하면 됩니다.
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">년월</label>
+        <input class="form-input" type="month" value="2026-04">
+      </div>
+      <div class="form-group">
+        <label class="form-label">소유자</label>
+        <select class="form-input"><option>나</option><option>상미</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">계좌</label>
+        <select class="form-input">
+          <option>토스_본계좌 (해외 · USD)</option>
+          <option>키움_ISA (ISA · KRW)</option>
+          <option>키움_IRP (IRP · KRW)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">계좌 총액 <span id="snap-unit" style="color:var(--text3);font-weight:400">(달러)</span></label>
+        <input class="form-input" type="number" placeholder="0.00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">환율 <span style="color:var(--profit);font-size:10.5px;font-weight:400">● GOOGLEFINANCE 자동</span></label>
+        <input class="form-input auto-filled" value="1452.3">
+        <div class="form-hint">달러 계좌만 해당 · KRW 계좌는 자동 1 처리</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">원화환산 <span style="color:var(--text3);font-size:10.5px;font-weight:400">🔒 자동</span></label>
+        <input class="form-input" style="opacity:0.5;pointer-events:none" placeholder="총액 × 환율">
+      </div>
+      <div class="form-group span2">
+        <label class="form-label">메모 (선택)</label>
+        <input class="form-input" placeholder="">
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('snapshotModal')">취소</button>
+      <button class="btn btn-success"><iconify-icon icon="lucide:check" width="13"></iconify-icon> 저장</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ===== NAV ===== */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  const order = ['dashboard','accounts','stocks','monthly','trades','cashflow','snapshot','settings'];
+  const tabs  = document.querySelectorAll('.nav-tab');
+  const idx   = order.indexOf(id);
+  if (tabs[idx]) tabs[idx].classList.add('active');
+  document.querySelector('.content-area').scrollTop = 0;
+  if (id === 'monthly' && !window._mRendered) { renderMonthlyChart(); window._mRendered = true; }
+}
+
+/* ===== OWNER SWITCHER ===== */
+function switchOwner(btn, key) {
+  document.querySelectorAll('.owner-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // 실제 개발 시 데이터 필터링 적용될 예정 (목업은 UI만)
+  const label = document.querySelector('.exchange-rate');
+  const hint = { all: '전체 합산 보기', me: '나 기준 보기', spouse: '상미 기준 보기' };
+  console.log(hint[key]);
+}
+
+/* ===== ACCOUNT SELECT ===== */
+const accountData = {
+  toss: { title: '토스_본계좌 보유 종목', rows: [
+    ['<span class="badge badge-blue">AAPL</span>','애플','15주','$163.2','$198.5','4,328,123','<span class="profit-val">+769,050</span>','<span class="profit-val">+21.6%</span>'],
+    ['<span class="badge badge-blue">QLD</span>','나스닥2X레버리지','30주','$71.0','$95.3','4,158,090','<span class="profit-val">+1,059,060</span>','<span class="profit-val">+34.2%</span>'],
+    ['<span class="badge badge-blue">SOXX</span>','반도체ETF','10주','$185.3','$198.7','2,887,890','<span class="profit-val">+194,610</span>','<span class="profit-val">+7.2%</span>'],
+  ]},
+  isa: { title: '키움_ISA 보유 종목', rows: [
+    ['<strong>133690</strong>','TIGER 나스닥100','50주','15,420원','17,830원','891,500','<span class="profit-val">+120,500</span>','<span class="profit-val">+15.6%</span>'],
+    ['<strong>379800</strong>','KODEX S&P500','30주','12,850원','13,920원','417,600','<span class="profit-val">+32,100</span>','<span class="profit-val">+8.3%</span>'],
+  ]},
+  irp: { title: '키움_IRP 보유 종목', rows: [
+    ['<strong>360750</strong>','TIGER 미국S&P500','40주','14,200원','15,490원','619,600','<span class="profit-val">+51,600</span>','<span class="profit-val">+9.1%</span>'],
+  ]},
+};
+function selectAccount(el, key) {
+  document.querySelectorAll('.account-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const d = accountData[key];
+  document.getElementById('account-detail-title').innerHTML = `<iconify-icon icon="lucide:list" width="13"></iconify-icon> ${d.title}`;
+  document.getElementById('account-detail-body').innerHTML = d.rows.map(r =>
+    `<tr>${r.map((c,i)=>`<td class="${i>=2?'text-right':''}">${c}</td>`).join('')}</tr>`
+  ).join('');
+}
+
+/* ===== CASH TABS ===== */
+function switchCashTab(btn, tab) {
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cash-deposit').style.display    = tab === 'deposit'  ? '' : 'none';
+  document.getElementById('cash-dividend').style.display   = tab === 'dividend' ? '' : 'none';
+  document.getElementById('div-chart-section').style.display = tab === 'dividend' ? '' : 'none';
+  if (tab === 'dividend' && !window._divChartRendered) { renderDivChart('all'); window._divChartRendered = true; }
+}
+
+/* ===== 배당 차트 ===== */
+const divChartData = {
+  all:  { labels: ['25-10','26-03'], data: [312307, 6154] },
+  2025: { labels: ['25-10'],         data: [312307] },
+  2026: { labels: ['26-03'],         data: [6154]   },
+};
+let _divChart = null;
+
+function renderDivChart(year) {
+  const d = divChartData[year] || divChartData.all;
+  if (_divChart) { _divChart.destroy(); _divChart = null; }
+  _divChart = new Chart(document.getElementById('divChart'), {
+    type: 'bar',
+    data: {
+      labels: d.labels,
+      datasets: [{
+        label: '배당금(₩)',
+        data: d.data,
+        backgroundColor: 'rgba(62,207,142,0.6)',
+        borderColor: '#3ecf8e',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1e1e38' } },
+        y: { grid: { color: '#1e1e38' }, ticks: { callback: v => v.toLocaleString()+'원' } }
+      }
+    }
+  });
+}
+
+function switchDivYear(btn, year) {
+  btn.parentElement.querySelectorAll('.owner-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDivChart(year);
+}
+
+/* ===== MODAL ===== */
+function openTradeModal()    { document.getElementById('tradeModal').classList.add('open'); }
+function openSnapshotModal() { document.getElementById('snapshotModal').classList.add('open'); }
+function closeModal(id)      { document.getElementById(id).classList.remove('open'); }
+
+function onAccountChange(sel) {
+  const isKrw = sel.value === 'isa' || sel.value === 'irp';
+  document.getElementById('price-unit').textContent = isKrw ? '(원)' : '(달러)';
+  const fxGroup = document.getElementById('fx-group');
+  const krwGrp  = document.getElementById('krw-unit-group');
+  fxGroup.style.opacity  = isKrw ? '0.3' : '1';
+  krwGrp.style.opacity   = isKrw ? '0.3' : '1';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+/* ===== CHARTS ===== */
+const months = ['25-09','25-10','25-11','25-12','26-01','26-02','26-03','26-04'];
+const dep     = [44,50,62,62,67.5,67.5,67.5,67.5];
+const val     = [46.2,47.1,51.8,55.4,52.8,56.2,59.8,62.2];
+const profits = [1700,-1200,2100,4380,-980,3210,1620,2840];
+
+Chart.defaults.color = '#a0a0b0';
+Chart.defaults.font.family = "'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif";
+Chart.defaults.font.size = 11;
+
+new Chart(document.getElementById('areaChart'), {
+  type: 'line',
+  data: { labels: months, datasets: [
+    { label:'총 평가금', data: val, fill: true, backgroundColor:'rgba(79,142,247,0.15)', borderColor:'#4f8ef7', borderWidth:2, tension:0.4, pointRadius:3 },
+    { label:'누적 입금', data: dep, fill: true, backgroundColor:'rgba(62,207,142,0.07)', borderColor:'#3ecf8e', borderWidth:2, borderDash:[4,4], tension:0.4, pointRadius:3 }
+  ]},
+  options: { responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ labels:{ boxWidth:10 } } },
+    scales: {
+      x:{ grid:{ color:'#1e1e38' } },
+      y:{ grid:{ color:'#1e1e38' }, ticks:{ callback: v => v+'만' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('barChart'), {
+  type: 'bar',
+  data: { labels: months, datasets: [{
+    label:'월 수익', data: profits,
+    backgroundColor: profits.map(v => v>=0 ? 'rgba(62,207,142,0.7)' : 'rgba(255,107,107,0.7)'),
+    borderColor:     profits.map(v => v>=0 ? '#3ecf8e' : '#ff6b6b'),
+    borderWidth:1, borderRadius:3,
+  }]},
+  options: { responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ display:false } },
+    scales: {
+      x:{ grid:{ color:'#1e1e38' } },
+      y:{ grid:{ color:'#1e1e38' }, ticks:{ callback: v=>(v>=0?'+':'')+v.toLocaleString()+'만' } }
+    }
+  }
+});
+
+function renderMonthlyChart() {
+  const m2 = ['25-01','25-02','25-03','25-04','25-05','25-06','25-07','25-08','25-09','25-10','25-11','25-12','26-01','26-02','26-03','26-04'];
+  const d2 = [20,25,30,35,40,44,44,44,44,50,62,62,67.5,67.5,67.5,67.5];
+  const v2 = [21,24.5,30.5,36.5,42,47,49,50,46.2,47.1,51.8,55.4,52.8,56.2,59.8,62.2];
+  new Chart(document.getElementById('monthlyAreaChart'), {
+    type:'line',
+    data:{ labels:m2, datasets:[
+      { label:'총 평가금', data:v2, fill:true, backgroundColor:'rgba(79,142,247,0.15)', borderColor:'#4f8ef7', borderWidth:2, tension:0.4, pointRadius:2 },
+      { label:'누적 입금', data:d2, fill:true, backgroundColor:'rgba(62,207,142,0.07)', borderColor:'#3ecf8e', borderWidth:2, borderDash:[5,5], tension:0.4, pointRadius:2 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ boxWidth:10 } } },
+      scales:{
+        x:{ grid:{ color:'#1e1e38' } },
+        y:{ grid:{ color:'#1e1e38' }, ticks:{ callback: v=>v+'만' } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
