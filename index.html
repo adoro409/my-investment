@@ -2239,10 +2239,25 @@ async function saveOwner() {
       if (APP.owners.find(o => o.name === name)) {
         showToast('이미 존재하는 소유자 이름입니다.', 'error'); return;
       }
-      // id 자동 생성 (max+1)
-      const nextId = APP.owners.length > 0
-        ? Math.max(...APP.owners.map(o => parseInt(o.id) || 0)) + 1
-        : 1;
+      // id 자동 생성 — 기존 ID 패턴 감지 (P01, P02... / 1, 2, 3...)
+      const nextId = (() => {
+        if (APP.owners.length === 0) return 'P01';
+        const sample = String(APP.owners[0]?.id || '');
+        const prefixMatch = sample.match(/^([A-Za-z]+)(\d+)$/);
+        if (prefixMatch) {
+          // P01, P02 형식
+          const prefix = prefixMatch[1];
+          const digits = prefixMatch[2].length;
+          const maxNum = Math.max(...APP.owners.map(o => {
+            const m = String(o.id||'').match(/^[A-Za-z]+(\d+)$/);
+            return m ? parseInt(m[1]) : 0;
+          }));
+          return prefix + String(maxNum + 1).padStart(digits, '0');
+        } else {
+          // 순수 숫자 형식
+          return Math.max(...APP.owners.map(o => parseInt(o.id)||0)) + 1;
+        }
+      })();
       // 추가: display_name/color 지원 여부 자동 감지
       try {
         await sbInsert('owners', { id: nextId, name, display_name: display, color });
