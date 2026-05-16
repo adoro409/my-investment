@@ -3185,7 +3185,9 @@ const OWNER_PALETTE = [
 ];
 function getOwnerColor(ownerName) {
   if (!ownerName || ownerName === 'all') return OWNER_PALETTE[0];
-  const idx = APP.owners.findIndex(o => (o.name || o.id) === ownerName);
+  const o = APP.owners.find(x => (x.name || x.id) === ownerName);
+  if (o?.color) return o.color;  // DB 저장 컬러 우선
+  const idx = APP.owners.findIndex(x => (x.name || x.id) === ownerName);
   return OWNER_PALETTE[(idx % (OWNER_PALETTE.length - 1)) + 1];
 }
 function updateOwnerTheme(ownerName) {
@@ -3206,7 +3208,7 @@ function buildOwnerBtns() {
   const btns = APP.owners.map((o, i) => {
     const name  = o.name || o.id;
     const label = o.display_name || name;
-    const color = OWNER_PALETTE[(i % (OWNER_PALETTE.length - 1)) + 1];
+    const color = o.color || OWNER_PALETTE[(i % (OWNER_PALETTE.length - 1)) + 1]; // DB 컬러 우선
     const isActive = APP.currentOwner === name;
     return `<button class="owner-btn ${isActive?'active':''}" onclick="switchOwner('${name}')"
       style="${isActive?'background:'+color:''}">${label}</button>`;
