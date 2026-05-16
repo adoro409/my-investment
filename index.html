@@ -2803,7 +2803,23 @@ async function saveAcct() {
   };
   try {
     if (_editAcctId) {
+      const oldAcct = APP.accounts.find(a => a.id === _editAcctId);
+      const oldName = oldAcct?.name || '';
       await sbUpdate('accounts', _editAcctId, updates);
+
+      // 계좌명이 바뀐 경우 → 해당 계좌의 override acct_name도 일괄 업데이트
+      if (oldName && oldName !== name) {
+        const sb = getSB();
+        const { data: ovrRows } = await sb.from('settings')
+          .select('key,value')
+          .like('key', `ovr_${_editAcctId}__%__acct_name`);
+        if (ovrRows?.length) {
+          await Promise.all(ovrRows
+            .filter(r => r.value === oldName)
+            .map(r => sb.from('settings').update({ value: name }).eq('key', r.key))
+          );
+        }
+      }
       showToast('✅ 계좌 수정 완료');
     } else {
       await sbUpsert('accounts', { id, ...updates, cash_krw: 0 }, 'id');
