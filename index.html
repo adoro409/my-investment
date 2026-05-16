@@ -470,6 +470,32 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
       • 백업 파일: <code>portfolio_backup_소유자_날짜.json</code>
     </div>
   </div>
+  <!-- 데이터 복원 -->
+  <div class="card" style="margin-top:14px;border:1px solid rgba(62,207,142,.2)">
+    <div class="section-title" style="color:var(--profit)">📂 백업 파일로 복원</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.8;
+      background:rgba(62,207,142,.07);padding:10px 12px;border-radius:6px">
+      백업 JSON 파일을 선택하면 Supabase에 데이터를 복원합니다.<br>
+      ⚠ <strong style="color:var(--text1)">기존 데이터와 병합(upsert)</strong>됩니다 — 같은 ID는 덮어쓰고, 없는 항목은 추가됩니다.
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label class="btn btn-sm" style="background:var(--profit);color:#0f0f1a;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <iconify-icon icon="lucide:folder-open" width="13"></iconify-icon> JSON 파일 선택
+        <input type="file" id="restoreFileInput" accept=".json" style="display:none" onchange="handleRestoreFile(event)">
+      </label>
+      <span id="restoreFileName" style="font-size:12px;color:var(--text3)">선택된 파일 없음</span>
+    </div>
+    <div id="restorePreview" style="display:none;margin-top:14px">
+      <div id="restorePreviewInfo" style="font-size:12px;color:var(--text2);margin-bottom:10px;
+        background:var(--bg3);padding:10px 12px;border-radius:6px;line-height:1.9"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" style="background:var(--profit);color:#0f0f1a" onclick="executeRestore()">
+          <iconify-icon icon="lucide:upload" width="13"></iconify-icon> 복원 실행
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="cancelRestore()">취소</button>
+      </div>
+    </div>
+  </div>
   <!-- 데이터 초기화 -->
   <div class="card" style="margin-top:14px;border:1px solid rgba(255,107,107,.25)">
     <div class="section-title" style="color:var(--loss)">⚠ 데이터 초기화</div>
@@ -2864,6 +2890,84 @@ async function exportBackup() {
     showToast('백업 실패: '+e.message,'error');
   } finally { showLoading(false); }
 }
+// ── 복원 기능 ──────────────────────────────────────────────────────────
+let _restoreData = null;
+
+function handleRestoreFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('restoreFileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const json = JSON.parse(ev.target.result);
+      if (!json.data) { showToast('올바른 백업 파일이 아닙니다.', 'error'); return; }
+      _restoreData = json;
+      const d = json.data;
+      const ts = json.timestamp ? new Date(json.timestamp).toLocaleString('ko-KR') : '알 수 없음';
+      document.getElementById('restorePreviewInfo').innerHTML =
+        `📅 백업 일시: <strong style="color:var(--text)">${ts}</strong><br>` +
+        `👤 백업 소유자: <strong style="color:var(--text)">${json.owner || '전체'}</strong><br>` +
+        `📊 복원 데이터: ` +
+        `소유자 <strong>${(d.owners||[]).length}</strong>명 · ` +
+        `계좌 <strong>${(d.accounts||[]).length}</strong>개 · ` +
+        `거래 <strong>${(d.trades||[]).length}</strong>건 · ` +
+        `입출금 <strong>${(d.deposits||[]).length}</strong>건 · ` +
+        `배당 <strong>${(d.dividends||[]).length}</strong>건 · ` +
+        `스냅샷 <strong>${(d.snapshots||[]).length}</strong>건`;
+      document.getElementById('restorePreview').style.display = 'block';
+    } catch(err) {
+      showToast('파일 파싱 오류: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function executeRestore() {
+  if (!_restoreData) return;
+  const sb = getSB(); if (!sb) { showToast('Supabase 미연결', 'error'); return; }
+  const d = _restoreData.data;
+  const tables = [
+    { name: 'owners',    rows: d.owners    || [] },
+    { name: 'accounts',  rows: d.accounts  || [] },
+    { name: 'trades',    rows: d.trades    || [] },
+    { name: 'deposits',  rows: d.deposits  || [] },
+    { name: 'dividends', rows: d.dividends || [] },
+    { name: 'snapshots', rows: d.snapshots || [] },
+  ];
+  const totalRows = tables.reduce((s, t) => s + t.rows.length, 0);
+  if (!confirm(`총 ${totalRows}건의 데이터를 Supabase에 복원합니다.\n기존 데이터와 병합(upsert)됩니다.\n계속하시겠습니까?`)) return;
+
+  showLoading(true, '데이터 복원 중...');
+  try {
+    for (const t of tables) {
+      if (t.rows.length === 0) continue;
+      // 청크 단위로 upsert (한 번에 최대 500건)
+      const chunk = 500;
+      for (let i = 0; i < t.rows.length; i += chunk) {
+        const slice = t.rows.slice(i, i + chunk);
+        const { error } = await sb.from(t.name).upsert(slice, { onConflict: 'id' });
+        if (error) throw new Error(`[${t.name}] ${error.message}`);
+      }
+    }
+    cancelRestore();
+    showToast('✅ 복원 완료! 데이터를 다시 불러옵니다.');
+    await reload();
+  } catch(err) {
+    showToast('복원 실패: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+function cancelRestore() {
+  _restoreData = null;
+  document.getElementById('restorePreview').style.display = 'none';
+  document.getElementById('restoreFileName').textContent = '선택된 파일 없음';
+  const input = document.getElementById('restoreFileInput');
+  if (input) input.value = '';
+}
+
 function updateBackupStatus() {
   const last = localStorage.getItem('lastBackupDate');
   // 설정 화면 라벨 업데이트
